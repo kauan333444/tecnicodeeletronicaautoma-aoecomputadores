@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV - Sistema de Videovigilância | Oficina de Mecatrônica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['"Share Tech Mono"', 'monospace'],
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        navy: {
+                            950: '#020617',
+                            900: '#090d16',
+                            800: '#0f172a',
+                            700: '#1e293b',
+                            600: '#334155',
+                            500: '#3b82f6',
+                            400: '#60a5fa',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617;
+            color: #94a3b8;
+        }
+        .digital-font {
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .cctv-panel {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(2, 6, 23, 0.99) 100%);
+            border: 1px solid rgba(51, 65, 85, 0.7);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+        .cctv-screen {
+            position: relative;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #0a1128 0%, #020617 100%);
+            border: 1px solid #1e293b;
+        }
+        /* Scanline effect for cameras */
+        .cctv-screen::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%);
+            background-size: 100% 4px;
+            z-index: 20;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        @keyframes scan-line {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(1000%); }
+        }
+        .scanline-bar {
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+            animation: scan-line 6s linear infinite;
+            z-index: 25;
+            pointer-events: none;
+        }
+        @keyframes blink-rec {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+        .rec-blink {
+            animation: blink-rec 1s infinite;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #020617;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-blue-600 selection:text-white">
+
+    <!-- HEADER -->
+    <header class="bg-navy-900 border-b border-navy-700 px-4 py-3 sticky top-0 z-50 shadow-2xl">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                    <i class="fa-solid fa-video text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-base font-bold tracking-wider text-slate-100 flex items-center gap-2">
+                        VMS-MECATRÓNICA <span class="text-[10px] px-2 py-0.5 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 font-mono">NVR-01 ONLINE</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 font-mono">Sistema de Circuito Fechado de Televisão — Oficina de Mecatrônica</p>
+                </div>
+            </div>
+
+            <!-- Global Controls & Status -->
+            <div class="flex items-center gap-3 flex-wrap justify-center">
+                <div class="flex items-center gap-2 bg-navy-950 px-3 py-1.5 rounded-md border border-navy-700">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500 rec-blink"></span>
+                    <span class="text-xs font-mono text-slate-300">GRAVAÇÃO 24/7 ATIVA</span>
+                </div>
+
+                <div class="flex items-center gap-1 bg-navy-950 p-1 rounded-md border border-navy-700">
+                    <button onclick="setViewMode('grid')" id="mode-grid-btn" class="px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-semibold transition">Grid (4x1)</button>
+                    <button onclick="setViewMode('single')" id="mode-single-btn" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 text-xs font-semibold transition">Expandido</button>
+                </div>
+
+                <button onclick="triggerManualSnapshot()" class="px-3 py-1.5 bg-navy-800 hover:bg-navy-700 border border-navy-600 text-slate-200 rounded-md text-xs font-semibold tracking-wide transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-camera"></i> SNAPSHOT
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="max-w-7xl mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 my-auto">
+
+        <!-- LEFT COLUMN: CAMERA FEEDS GRID / VIEWER (8 cols) -->
+        <section class="lg:col-span-8 flex flex-col gap-4">
+            
+            <!-- Active Camera Title Bar -->
+            <div class="cctv-panel rounded-xl px-4 py-2.5 flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
+                    <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono" id="active-cam-title">CAM 01: Bancada de Automação & CLP</h2>
+                </div>
+                <div class="flex items-center gap-3 text-xs font-mono text-slate-400">
+                    <span id="live-time">16:00:48 UTC</span>
+                    <span class="text-blue-400">1080p @ 30fps</span>
+                </div>
+            </div>
+
+            <!-- Cameras Grid or Single View Container -->
+            <div id="camera-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                <!-- CAM 1 -->
+                <div class="cctv-screen rounded-xl h-64 flex flex-col justify-between p-3 cursor-pointer transition hover:border-blue-500 relative" onclick="selectCamera(1)">
+                    <div class="scanline-bar"></div>
+                    <!-- Simulated Video Background Imagery using CSS/SVG & Shapes -->
+                    <div class="absolute inset-0 bg-gradient-to-br from-navy-950 via-blue-950/40 to-navy-900 flex items-center justify-center pointer-events-none">
+                        <!-- Simulated PLC schematic wireframe -->
+                        <div class="absolute inset-4 border border-blue-500/20 rounded-lg flex flex-col justify-between p-3">
+                            <div class="flex justify-between items-center text-[10px] text-blue-400/60 font-mono">
+                                <span>I:0.0 / I:0.7 (BUS ACTIVE)</span>
+                                <i class="fa-solid fa-network-wired"></i>
+                            </div>
+                            <div class="flex justify-center items-center gap-4">
+                                <div class="w-12 h-16 bg-blue-600/20 border border-blue-400/40 rounded flex flex-col items-center justify-center text-[9px] text-blue-300 font-mono">PLC</div>
+                                <div class="w-16 h-12 bg-slate-800/40 border border-slate-600/40 rounded flex items-center justify-center text-[9px] text-slate-300 font-mono">HMI</div>
+                                <div class="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-400/50 flex items-center justify-center animate-pulse">
+                                    <i class="fa-solid fa-bolt text-blue-400 text-xs"></i>
+                                </div>
+                            </div>
+                            <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+                                <span>RACK-01 SUPPLY</span>
+                                <span class="text-emerald-400">24V DC OK</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-start z-30">
+                        <span class="text-[10px] font-mono bg-navy-950/90 text-blue-400 px-2 py-0.5 rounded border border-navy-700 shadow">CAM-01: Bancada CLP</span>
+                        <span class="text-[10px] font-mono bg-red-600/90 text-white px-1.5 py-0.5 rounded rec-blink shadow">REC</span>
+                    </div>
+                    <div class="z-30 flex justify-between items-end text-[10px] font-mono text-slate-300 bg-navy-950/60 px-2 py-1 rounded backdrop-blur-sm">
+                        <span>ESTADO: NORMAL</span>
+                        <span class="text-blue-400">MOV: DETETADO</span>
+                    </div>
+                </div>
+
+                <!-- CAM 2 -->
+                <div class="cctv-screen rounded-xl h-64 flex flex-col justify-between p-3 cursor-pointer transition hover:border-blue-500 relative" onclick="selectCamera(2)">
+                    <div class="scanline-bar"></div>
+                    <div class="absolute inset-0 bg-gradient-to-br from-navy-950 via-slate-900 to-blue-950/50 flex items-center justify-center pointer-events-none">
+                        <div class="absolute inset-4 border border-blue-500/20 rounded-lg flex flex-col justify-between p-3">
+                            <div class="flex justify-between items-center text-[10px] text-blue-400/60 font-mono">
+                                <span>AXIS X/Y/Z TELEMETRY</span>
+                                <i class="fa-solid fa-robot"></i>
+                            </div>
+                            <div class="flex justify-center items-center">
+                                <div class="relative w-24 h-24 border border-dashed border-blue-500/30 rounded-full flex items-center justify-center animate-spin" style="animation-duration: 20s;">
+                                    <div class="w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+                                <span class="text-blue-400">JOINT 1-6 SYNC</span>
+                                <span class="text-emerald-400">READY</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-start z-30">
+                        <span class="text-[10px] font-mono bg-navy-950/90 text-blue-400 px-2 py-0.5 rounded border border-navy-700 shadow">CAM-02: Braço Robótico</span>
+                        <span class="text-[10px] font-mono bg-red-600/90 text-white px-1.5 py-0.5 rounded rec-blink shadow">REC</span>
+                    </div>
+                    <div class="z-30 flex justify-between items-end text-[10px] font-mono text-slate-300 bg-navy-950/60 px-2 py-1 rounded backdrop-blur-sm">
+                        <span>ESTADO: EM OPERAÇÃO</span>
+                        <span class="text-blue-400">VEL: 100%</span>
+                    </div>
+                </div>
+
+                <!-- CAM 3 -->
+                <div class="cctv-screen rounded-xl h-64 flex flex-col justify-between p-3 cursor-pointer transition hover:border-blue-500 relative" onclick="selectCamera(3)">
+                    <div class="scanline-bar"></div>
+                    <div class="absolute inset-0 bg-gradient-to-br from-navy-950 via-blue-950/30 to-navy-900 flex items-center justify-center pointer-events-none">
+                        <div class="absolute inset-4 border border-blue-500/20 rounded-lg flex flex-col justify-between p-3">
+                            <div class="flex justify-between items-center text-[10px] text-blue-400/60 font-mono">
+                                <span>EXTRUDER & CNC BED</span>
+                                <i class="fa-solid fa-print"></i>
+                            </div>
+                            <div class="flex justify-center items-center gap-2">
+                                <div class="w-20 h-10 border border-blue-400/40 rounded flex items-center justify-center text-[10px] text-blue-300 font-mono bg-blue-950/50">215.4°C</div>
+                                <div class="w-12 h-10 border border-slate-600/40 rounded flex items-center justify-center text-[10px] text-slate-300 font-mono">BED 60°C</div>
+                            </div>
+                            <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+                                <span>JOB: MEC_GEAR.GCODE</span>
+                                <span class="text-amber-400">74% CONCLUÍDO</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-start z-30">
+                        <span class="text-[10px] font-mono bg-navy-950/90 text-blue-400 px-2 py-0.5 rounded border border-navy-700 shadow">CAM-03: Impressão 3D & CNC</span>
+                        <span class="text-[10px] font-mono bg-red-600/90 text-white px-1.5 py-0.5 rounded rec-blink shadow">REC</span>
+                    </div>
+                    <div class="z-30 flex justify-between items-end text-[10px] font-mono text-slate-300 bg-navy-950/60 px-2 py-1 rounded backdrop-blur-sm">
+                        <span>ESTADO: CICLO ATIVO</span>
+                        <span class="text-blue-400">TEMP OK</span>
+                    </div>
+                </div>
+
+                <!-- CAM 4 -->
+                <div class="cctv-screen rounded-xl h-64 flex flex-col justify-between p-3 cursor-pointer transition hover:border-blue-500 relative" onclick="selectCamera(4)">
+                    <div class="scanline-bar"></div>
+                    <div class="absolute inset-0 bg-gradient-to-br from-navy-950 via-slate-900 to-navy-900 flex items-center justify-center pointer-events-none">
+                        <div class="absolute inset-4 border border-blue-500/20 rounded-lg flex flex-col justify-between p-3">
+                            <div class="flex justify-between items-center text-[10px] text-blue-400/60 font-mono">
+                                <span>PERIMETER SECURITY</span>
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </div>
+                            <div class="flex justify-center items-center">
+                                <div class="px-3 py-1 rounded bg-blue-600/20 border border-blue-500/40 text-blue-300 text-[10px] font-mono tracking-widest">
+                                    ACCESS CONTROL SECURE
+                                </div>
+                            </div>
+                            <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+                                <span>DOOR: LOCKED</span>
+                                <span class="text-emerald-400">BIOMETRIC OK</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-start z-30">
+                        <span class="text-[10px] font-mono bg-navy-950/90 text-blue-400 px-2 py-0.5 rounded border border-navy-700 shadow">CAM-04: Armário & Solda</span>
+                        <span class="text-[10px] font-mono bg-red-600/90 text-white px-1.5 py-0.5 rounded rec-blink shadow">REC</span>
+                    </div>
+                    <div class="z-30 flex justify-between items-end text-[10px] font-mono text-slate-300 bg-navy-950/60 px-2 py-1 rounded backdrop-blur-sm">
+                        <span>ESTADO: SEGURO</span>
+                        <span class="text-emerald-400">ARMED</span>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- RIGHT COLUMN: PTZ CONTROLS & SECURITY LOGS (4 cols) -->
+        <section class="lg:col-span-4 flex flex-col gap-6">
+
+            <!-- PTZ (Pan, Tilt, Zoom) Control Panel -->
+            <div class="cctv-panel rounded-xl p-4">
+                <div class="flex justify-between items-center mb-3 border-b border-navy-700 pb-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-compass text-blue-400"></i>
+                        <h2 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Controlo PTZ (Câmara Ativa)</h2>
+                    </div>
+                    <span class="text-[10px] font-mono text-blue-400">PTZ READY</span>
+                </div>
+
+                <!-- Directional Pad -->
+                <div class="flex flex-col items-center justify-center gap-2 my-4">
+                    <button onclick="ptzAction('UP')" class="w-12 h-10 bg-navy-800 hover:bg-navy-700 border border-navy-600 text-blue-400 rounded-lg flex items-center justify-center transition active:scale-95">
+                        <i class="fa-solid fa-chevron-up"></i>
+                    </button>
+                    <div class="flex gap-4">
+                        <button onclick="ptzAction('LEFT')" class="w-12 h-10 bg-navy-800 hover:bg-navy-700 border border-navy-600 text-blue-400 rounded-lg flex items-center justify-center transition active:scale-95">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <button onclick="ptzAction('HOME')" class="w-12 h-10 bg-navy-950 hover:bg-navy-800 border border-navy-600 text-slate-300 rounded-lg flex items-center justify-center transition text-xs font-mono font-bold active:scale-95">
+                            HOME
+                        </button>
+                        <button onclick="ptzAction('RIGHT')" class="w-12 h-10 bg-navy-800 hover:bg-navy-700 border border-navy-600 text-blue-400 rounded-lg flex items-center justify-center transition active:scale-95">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    <button onclick="ptzAction('DOWN')" class="w-12 h-10 bg-navy-800 hover:bg-navy-700 border border-navy-600 text-blue-400 rounded-lg flex items-center justify-center transition active:scale-95">
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                </div>
+
+                <!-- Zoom & Focus Controls -->
+                <div class="grid grid-cols-2 gap-2 pt-2 border-t border-navy-700">
+                    <button onclick="ptzAction('ZOOM_IN')" class="py-1.5 bg-navy-800 hover:bg-navy-700 border border-navy-600 text-slate-200 rounded text-xs font-semibold transition flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-magnifying-glass-plus"></i> Zoom +
+                    </button>
+                    <button onclick="ptzAction('ZOOM_OUT')" class="py-1.5 bg-navy-800 hover:bg-navy-700 border border-navy-600 text-slate-200 rounded text-xs font-semibold transition flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-magnifying-glass-minus"></i> Zoom -
+                    </button>
+                </div>
+            </div>
+
+            <!-- Security & Motion Events Console -->
+            <div class="cctv-panel rounded-xl p-4 flex flex-col flex-grow">
+                <div class="flex justify-between items-center mb-3 border-b border-navy-700 pb-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-shield-halved text-blue-400"></i>
+                        <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Eventos de Segurança & Alertas</h3>
+                    </div>
+                    <button onclick="clearLog()" class="text-[10px] text-slate-400 hover:text-slate-200 font-mono">Limpar</button>
+                </div>
+
+                <div class="bg-navy-950 border border-navy-700 rounded-lg p-3 h-40 overflow-y-auto font-mono text-[11px] space-y-1.5 flex flex-col" id="cctv-logger">
+                    <div class="text-blue-400">[16:00:01] Sistema de CFTV inicializado com feeds simulados.</div>
+                    <div class="text-slate-300">[16:00:15] Deteção de movimento normal na Bancada de CLP (CAM-01).</div>
+                    <div class="text-blue-400">[16:00:30] Gravação contínua em disco NVR-01 sem falhas.</div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-navy-900 border-t border-navy-700 py-3 px-4 text-center text-xs text-slate-400 font-mono">
+        <p>Sistema de Videovigilância Mecatrônica — Preto & Azul Marinho Edition</p>
+    </footer>
+
+    <script>
+        // State variables
+        let cctvState = {
+            activeCam: 1,
+            viewMode: 'grid'
+        };
+
+        const camNames = {
+            1: "CAM 01: Bancada de Automação & CLP",
+            2: "CAM 02: Braço Robótico 6-Eixos",
+            3: "CAM 03: Bancada de Impressão 3D & CNC",
+            4: "CAM 04: Armário de Ferramentas & Solda"
+        };
+
+        function getTimestamp() {
+            const now = new Date();
+            return now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+        }
+
+        function appendCCTVLog(message, type = 'info') {
+            const consoleEl = document.getElementById('cctv-logger');
+            const div = document.createElement('div');
+            
+            let colorClass = 'text-slate-300';
+            if (type === 'info') colorClass = 'text-blue-400';
+            if (type === 'warn') colorClass = 'text-amber-400';
+            if (type === 'action') colorClass = 'text-slate-200';
+
+            div.className = colorClass;
+            div.textContent = `[${getTimestamp()}] ${message}`;
+            consoleEl.appendChild(div);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function selectCamera(id) {
+            cctvState.activeCam = id;
+            document.getElementById('active-cam-title').textContent = camNames[id];
+            appendCCTVLog(`Foco alterado para ${camNames[id]}.`, 'info');
+        }
+
+        function setViewMode(mode) {
+            cctvState.viewMode = mode;
+            const gridBtn = document.getElementById('mode-grid-btn');
+            const singleBtn = document.getElementById('mode-single-btn');
+            const container = document.getElementById('camera-container');
+
+            if (mode === 'grid') {
+                gridBtn.className = "px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-semibold transition";
+                singleBtn.className = "px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 text-xs font-semibold transition";
+                container.className = "grid grid-cols-1 md:grid-cols-2 gap-4";
+                appendCCTVLog("Modo de visualização: Grid 4 Câmeras.", 'action');
+            } else {
+                singleBtn.className = "px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-semibold transition";
+                gridBtn.className = "px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 text-xs font-semibold transition";
+                container.className = "grid grid-cols-1 gap-4";
+                appendCCTVLog("Modo de visualização: Ecrã Único Expandido.", 'action');
+            }
+        }
+
+        function ptxAction(action) {
+            appendCCTVLog(`Comando PTZ [${action}] executado na ${camNames[cctvState.activeCam]}.`, 'action');
+        }
+
+        function triggerManualSnapshot() {
+            appendCCTVLog(`Snapshot manual capturado com sucesso da ${camNames[cctvState.activeCam]} (Guardado no NVR).`, 'info');
+        }
+
+        function clearLog() {
+            document.getElementById('cctv-logger').innerHTML = '<div class="text-blue-400">Consola limpa pelo operador.</div>';
+        }
+
+        // Clock updater
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('live-time').textContent = now.toTimeString().split(' ')[0] + ' UTC';
+        }, 1000);
+
+        window.onload = function() {
+            appendCCTVLog("Módulo de câmeras conectado ao barramento principal da oficina.", "info");
+        };
+    </script>
+</body>
+</html>
